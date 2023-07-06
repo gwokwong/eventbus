@@ -1,4 +1,4 @@
-package eventBus
+package eventbus
 
 import (
 	"sync"

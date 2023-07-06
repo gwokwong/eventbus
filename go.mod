@@ -1,4 +1,3 @@
-module eventBus
+module eventbus
 
 go 1.20
-

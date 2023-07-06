@@ -1,7 +1,7 @@
 package main
 
 import (
-	eventBus "eventBus/eventBus"
+	eventBus "eventbus/eventbus"
 	"fmt"
 )
 
