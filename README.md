@@ -1,39 +1,39 @@
 # 事件总线
 
+## 安装
+
+```
+go get -u github.com/gowkwong/eventbus
+```
+
 ## 用法示例
 
 ```golang
-package main
 
-import (
-	eventBus "eventbus/eventbus"
-	"fmt"
-)
-
-type testEvent struct {
-	duration int
-}
-
-func (e *testEvent) EventID() eventBus.EventID {
-	return testEventId
-}
-
-const (
-	testEventId = eventBus.EventID("test_event")
-)
 
 func main() {
-	bus := eventBus.New()
-	duration := 10000
-	id := bus.Subscribe(testEventId, func(e eventBus.Event) {
-		se := e.(*testEvent)
-		fmt.Println("收到的推送消息-------->")
-		fmt.Println(se.duration)
-	})
-	bus.Publish(&testEvent{
-		duration: duration,
-	})
-	bus.Unsubscribe(id)
+	eventBus := NewEventBus()
+	handler1 := func(event Event) {
+		fmt.Println("Handler 1 received event:", event)
+	}
+	handler2 := func(event Event) {
+		fmt.Println("Handler 2 received event:", event)
+	}
+
+	// Subscribe to events
+	eventBus.Subscribe("event1", handler1)
+	eventBus.Subscribe("event2", handler2)
+
+	// Publish events
+	eventBus.Publish(Event{Name: "event1", Payload: "Hello, World!"})
+	eventBus.Publish(Event{Name: "event2", Payload: 42})
+
+	// Unsubscribe from an event
+	eventBus.Unsubscribe("event1", handler1)
+
+	// Publish events again
+	eventBus.Publish(Event{Name: "event1", Payload: "This event should not be handled"})
+	eventBus.Publish(Event{Name: "event2", Payload: "Another event"})
 }
 
 

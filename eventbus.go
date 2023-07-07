@@ -1,121 +1,67 @@
 package eventbus
 
 import (
+	"reflect"
 	"sync"
 )
 
-// EventID 定义事件ID类型
-type EventID string
-
-// Event 定义事件接口
-type Event interface {
-	EventID() EventID
+// Event 定义事件
+type Event struct {
+	Name    string
+	Payload interface{}
 }
 
-// EventHandler 定义事件处理函数类型
 type EventHandler func(event Event)
 
-// Subscription 定义订阅对象
-type Subscription struct {
-	eventID EventID
-	id      uint64
+type Subscriber struct {
+	handler EventHandler
 }
 
-// BusSubscriber 定义事件订阅者接口
-type BusSubscriber interface {
-	Subscribe(eventID EventID, cb EventHandler) Subscription
-	Unsubscribe(sub Subscription)
+type EventBus struct {
+	subscribers map[string][]*Subscriber
+	mu          sync.RWMutex
 }
 
-// BusPublisher 定义事件发布者接口
-type BusPublisher interface {
-	Publish(event Event)
-}
-
-// Bus 定义事件总线接口
-type Bus interface {
-	BusSubscriber
-	BusPublisher
-}
-
-// bus 实现了 Bus 接口
-type bus struct {
-	lock   sync.Mutex
-	nextID uint64
-	infos  map[EventID][]*subscriptionInfo
-}
-
-type subscriptionInfo struct {
-	id uint64
-	cb EventHandler
-}
-
-// New 创建一个新的事件总线
-func New() Bus {
-	return &bus{
-		infos: make(map[EventID][]*subscriptionInfo),
+// NewEventBus 新建事件
+func NewEventBus() *EventBus {
+	return &EventBus{
+		subscribers: make(map[string][]*Subscriber),
 	}
 }
 
-func (b *bus) Subscribe(eventID EventID, cb EventHandler) Subscription {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
-	id := b.nextID
-	b.nextID++
-
-	sub := &subscriptionInfo{
-		id: id,
-		cb: cb,
+// Subscribe 订阅
+func (eb *EventBus) Subscribe(eventName string, handler EventHandler) {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+	if _, ok := eb.subscribers[eventName]; !ok {
+		eb.subscribers[eventName] = []*Subscriber{}
 	}
-	b.infos[eventID] = append(b.infos[eventID], sub)
-
-	return Subscription{
-		eventID: eventID,
-		id:      id,
-	}
+	subscriber := &Subscriber{handler: handler}
+	eb.subscribers[eventName] = append(eb.subscribers[eventName], subscriber)
 }
 
-func (b *bus) Unsubscribe(subscription Subscription) {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
-	if infos, ok := b.infos[subscription.eventID]; ok {
-		for idx, info := range infos {
-			if info.id == subscription.id {
-				infos = append(infos[:idx], infos[idx+1:]...)
+// Unsubscribe 取消订阅
+func (eb *EventBus) Unsubscribe(eventName string, handler EventHandler) {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+	if subscribers, ok := eb.subscribers[eventName]; ok {
+		for i, subscriber := range subscribers {
+			if reflect.ValueOf(subscriber.handler).Pointer() == reflect.ValueOf(handler).Pointer() {
+				// Remove the subscriber from the subscribers list
+				eb.subscribers[eventName] = append(subscribers[:i], subscribers[i+1:]...)
 				break
 			}
 		}
+	}
+}
 
-		if len(infos) == 0 {
-			delete(b.infos, subscription.eventID)
-		} else {
-			b.infos[subscription.eventID] = infos
+// Publish 发布
+func (eb *EventBus) Publish(event Event) {
+	eb.mu.RLock()
+	defer eb.mu.RUnlock()
+	if subscribers, ok := eb.subscribers[event.Name]; ok {
+		for _, subscriber := range subscribers {
+			subscriber.handler(event)
 		}
 	}
-}
-
-func (b *bus) Publish(event Event) {
-	infos := b.copySubscriptions(event.EventID())
-
-	for _, sub := range infos {
-		sub.cb(event)
-	}
-}
-
-func (b *bus) copySubscriptions(eventID EventID) []*subscriptionInfo {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
-	infos, ok := b.infos[eventID]
-	if !ok {
-		return nil
-	}
-
-	// 复制订阅列表，以避免在迭代时修改原始列表
-	copiedInfos := make([]*subscriptionInfo, len(infos))
-	copy(copiedInfos, infos)
-
-	return copiedInfos
 }
