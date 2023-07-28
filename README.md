@@ -3,7 +3,7 @@
 ## 安装
 
 ```
-go get -u github.com/gowkwong/eventbus
+go get -u github.com/gwokwong/eventbus
 ```
 
 ## 用法示例
